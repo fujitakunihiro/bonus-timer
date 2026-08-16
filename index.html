@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ボーナスタイマー</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:    #0d0d1a;
+    --card:  #13132a;
+    --green: #00e5b0;
+    --amber: #ffb300;
+    --red:   #ff4455;
+    --text:  #e8e8f5;
+    --muted: #6666aa;
+    --track: #1e1e3a;
+    --font:  'Share Tech Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 32px 16px;
+  }
+
+  .app {
+    width: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  h1 {
+    font-size: 13px;
+    letter-spacing: 6px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* ── リング ── */
+  .ring-wrap {
+    position: relative;
+    width: 220px;
+    height: 220px;
+  }
+  .ring-wrap svg {
+    transform: rotate(-90deg);
+    width: 220px;
+    height: 220px;
+  }
+  .ring-bg   { fill: none; stroke: var(--track); stroke-width: 14; }
+  .ring-prog { fill: none; stroke-width: 14; stroke-linecap: round;
+               stroke-dasharray: 565; stroke-dashoffset: 565;
+               transition: stroke-dashoffset 0.9s linear, stroke 0.4s; }
+  .ring-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px;
+  }
+  .ring-time  { font-size: 36px; font-family: var(--font); color: var(--text); letter-spacing: 2px; }
+  .ring-sub   { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+
+  /* ── バッジ ── */
+  .badge {
+    padding: 8px 24px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: var(--font);
+    letter-spacing: 2px;
+    background: var(--card);
+    color: var(--muted);
+    border: 1px solid #222244;
+    transition: background 0.3s, color 0.3s, border-color 0.3s;
+  }
+  .badge.bonus {
+    background: #2a1a00;
+    color: var(--amber);
+    border-color: var(--amber);
+    animation: pulse 1s ease-in-out infinite alternate;
+  }
+  @keyframes pulse { from { opacity: 0.85; } to { opacity: 1; } }
+
+  /* ── 設定パネル ── */
+  .panel {
+    background: var(--card);
+    border: 1px solid #1e1e40;
+    border-radius: 8px;
+    padding: 18px 22px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .row label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    width: 110px;
+    flex-shrink: 0;
+  }
+  .row input[type=number] {
+    width: 80px;
+    background: var(--bg);
+    border: 1px solid #2a2a55;
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 18px;
+    text-align: center;
+    padding: 4px 6px;
+    outline: none;
+  }
+  .row input[type=number]:focus { border-color: var(--green); }
+  .row span { font-size: 11px; color: var(--muted); }
+
+  .voice-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 4px;
+    border-top: 1px solid #1e1e40;
+  }
+  .voice-row label { font-size: 11px; color: var(--muted); letter-spacing: 1px; cursor: pointer; }
+  .toggle {
+    position: relative; width: 40px; height: 22px; cursor: pointer;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider-bg {
+    position: absolute; inset: 0;
+    background: #2a2a55; border-radius: 22px;
+    transition: background 0.3s;
+  }
+  .toggle input:checked + .slider-bg { background: var(--green); }
+  .slider-bg::after {
+    content: ''; position: absolute;
+    width: 16px; height: 16px; left: 3px; top: 3px;
+    background: white; border-radius: 50%;
+    transition: transform 0.3s;
+  }
+  .toggle input:checked + .slider-bg::after { transform: translateX(18px); }
+
+  /* 音声選択 */
+  .voice-select {
+    background: var(--bg);
+    border: 1px solid #2a2a55;
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 11px;
+    padding: 3px 6px;
+    outline: none;
+    flex: 1;
+  }
+
+  /* ── ボタン ── */
+  .btns { display: flex; gap: 10px; }
+  .btn-main {
+    font-family: var(--font);
+    font-size: 15px;
+    letter-spacing: 2px;
+    padding: 12px 32px;
+    border: none; border-radius: 4px;
+    cursor: pointer;
+    background: var(--green);
+    color: #001a12;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn-main:hover { opacity: 0.85; }
+  .btn-main:active { transform: scale(0.97); }
+  .btn-main.stop { background: var(--red); color: #1a0005; }
+
+  .btn-reset {
+    font-family: var(--font);
+    font-size: 12px;
+    letter-spacing: 1px;
+    padding: 12px 18px;
+    border: 1px solid #2a2a55;
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--muted);
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-reset:hover { border-color: var(--muted); color: var(--text); }
+
+  /* ── ログ ── */
+  .log-box {
+    background: var(--card);
+    border: 1px solid #1e1e40;
+    border-radius: 8px;
+    padding: 12px 16px;
+    width: 100%;
+    height: 130px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column-reverse;
+  }
+  .log-inner { display: flex; flex-direction: column; gap: 2px; }
+  .log-entry { font-size: 11px; letter-spacing: 0.5px; padding: 1px 0; }
+  .log-entry.bonus { color: var(--amber); }
+  .log-entry.stop  { color: #ff8888; }
+  .log-entry.info  { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Bonus Timer</h1>
+
+  <!-- リング -->
+  <div class="ring-wrap">
+    <svg viewBox="0 0 220 220">
+      <circle class="ring-bg"   cx="110" cy="110" r="90"/>
+      <circle class="ring-prog" cx="110" cy="110" r="90" id="ring"/>
+    </svg>
+    <div class="ring-center">
+      <div class="ring-time" id="timeDisp">00:00</div>
+      <div class="ring-sub"  id="subDisp">STANDBY</div>
+    </div>
+  </div>
+
+  <div class="badge" id="badge">STANDBY</div>
+
+  <!-- 設定 -->
+  <div class="panel">
+    <div class="row">
+      <label>待機時間</label>
+      <input type="number" id="waitInput" value="5" min="1" max="99999">
+      <span>秒</span>
+    </div>
+    <div class="row">
+      <label>ボーナス時間</label>
+      <input type="number" id="bonusInput" value="50" min="1" max="99999">
+      <span>秒</span>
+    </div>
+    <div class="voice-row">
+      <label for="voiceToggle">音声</label>
+      <label class="toggle">
+        <input type="checkbox" id="voiceToggle" checked>
+        <span class="slider-bg"></span>
+      </label>
+      <select class="voice-select" id="voiceSelect"></select>
+    </div>
+  </div>
+
+  <!-- ボタン -->
+  <div class="btns">
+    <button class="btn-main" id="mainBtn" onclick="toggle()">▶ スタート</button>
+    <button class="btn-reset" onclick="resetTimer()">RESET</button>
+  </div>
+
+  <!-- ログ -->
+  <div class="log-box">
+    <div class="log-inner" id="logInner"></div>
+  </div>
+</div>
+
+<script>
+  const CIRC = 2 * Math.PI * 90;
+  let running = false, phase = 'idle', elapsed = 0, bonusElapsed = 0, ticker = null;
+
+  const ring      = document.getElementById('ring');
+  const timeDisp  = document.getElementById('timeDisp');
+  const subDisp   = document.getElementById('subDisp');
+  const badge     = document.getElementById('badge');
+  const mainBtn   = document.getElementById('mainBtn');
+  const waitInput = document.getElementById('waitInput');
+  const bonusInput= document.getElementById('bonusInput');
+  const voiceSel  = document.getElementById('voiceSelect');
+  const logInner  = document.getElementById('logInner');
+
+  // ── 音声セットアップ ──
+  let voices = [];
+  function loadVoices() {
+    voices = speechSynthesis.getVoices();
+    voiceSel.innerHTML = '';
+    voices.forEach((v, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = v.name + (v.lang ? ` (${v.lang})` : '');
+      // 日本語音声を優先選択
+      if (v.lang && v.lang.startsWith('ja')) opt.selected = true;
+      voiceSel.appendChild(opt);
+    });
+  }
+  speechSynthesis.onvoiceschanged = loadVoices;
+  loadVoices();
+
+  function speak(text) {
+    if (!document.getElementById('voiceToggle').checked) return;
+    speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    const vi = parseInt(voiceSel.value);
+    if (!isNaN(vi) && voices[vi]) utt.voice = voices[vi];
+    utt.lang = voices[vi] ? voices[vi].lang : 'ja-JP';
+    utt.rate = 1.0;
+    speechSynthesis.speak(utt);
+  }
+
+  // ── タイマー ──
+  function toggle() {
+    if (!running) {
+      running = true; phase = 'waiting'; elapsed = 0; bonusElapsed = 0;
+      mainBtn.textContent = '■ 停止';
+      mainBtn.classList.add('stop');
+      addLog('タイマー開始', 'info');
+      ticker = setInterval(tick, 1000);
+    } else {
+      stop(true);
+    }
+  }
+
+  function tick() {
+    const wait  = Math.max(1, parseInt(waitInput.value)  || 1);
+    const bonus = Math.max(1, parseInt(bonusInput.value) || 1);
+
+    if (phase === 'waiting') {
+      elapsed++;
+      setRing(elapsed / wait, '#00e5b0');
+      setSub(`残り ${wait - elapsed}秒`, 'WAITING');
+      setBadge('WAITING', false);
+      if (elapsed >= wait) {
+        phase = 'bonus'; bonusElapsed = 0;
+        setBadge('BONUS START !', true);
+        addLog('ボーナス開始！', 'bonus');
+        speak('ボーナス開始');
+      }
+    } else if (phase === 'bonus') {
+      bonusElapsed++;
+      setRing(bonusElapsed / bonus, '#ffb300');
+      setSub(`ボーナス残り ${bonus - bonusElapsed}秒`, 'BONUS');
+      if (bonusElapsed >= bonus) {
+        addLog('ボーナス停止', 'stop');
+        speak('ボーナス停止');
+        phase = 'waiting'; elapsed = 0;
+        setBadge('WAITING', false);
+        setRing(0, '#00e5b0');
+        addLog('待機再開', 'info');
+      }
+    }
+  }
+
+  function stop(manual) {
+    running = false; phase = 'idle'; elapsed = 0; bonusElapsed = 0;
+    clearInterval(ticker); ticker = null;
+    mainBtn.textContent = '▶ スタート';
+    mainBtn.classList.remove('stop');
+    setRing(0, '#00e5b0');
+    setSub('STANDBY', 'STANDBY');
+    setBadge('STANDBY', false);
+    if (manual) addLog('停止', 'stop');
+  }
+
+  function resetTimer() {
+    stop(false);
+    logInner.innerHTML = '';
+  }
+
+  // ── UI helpers ──
+  function setRing(prog, color) {
+    ring.style.stroke = color;
+    ring.style.strokeDashoffset = CIRC * (1 - Math.min(prog, 1));
+  }
+
+  function setSub(sub, time) {
+    const s = running ? sub : 'STANDBY';
+    subDisp.textContent = s;
+    // 時計表示
+    let remain = 0;
+    if (phase === 'waiting') remain = Math.max(0, (parseInt(waitInput.value)||1) - elapsed);
+    else if (phase === 'bonus') remain = Math.max(0, (parseInt(bonusInput.value)||1) - bonusElapsed);
+    const mm = String(Math.floor(remain / 60)).padStart(2,'0');
+    const ss = String(remain % 60).padStart(2,'0');
+    timeDisp.textContent = running ? `${mm}:${ss}` : '00:00';
+  }
+
+  function setBadge(text, isBonus) {
+    badge.textContent = text;
+    badge.className = 'badge' + (isBonus ? ' bonus' : '');
+  }
+
+  function addLog(msg, cls) {
+    const now = new Date().toLocaleTimeString('ja-JP');
+    const div = document.createElement('div');
+    div.className = `log-entry ${cls}`;
+    div.textContent = `${now}  ${msg}`;
+    logInner.prepend(div);
+  }
+</script>
+</body>
+</html>
