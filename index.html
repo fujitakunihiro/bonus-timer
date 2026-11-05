@@ -244,9 +244,19 @@
       <span>秒</span>
     </div>
     <div class="row">
-      <label>ボーナス時間</label>
-      <input type="number" id="bonusInput" value="50" min="1" max="99999">
+      <label for="bonusMinInput">ボーナス最短時間</label>
+      <input type="number" id="bonusMinInput" value="50" min="1" max="99999">
       <span>秒</span>
+    </div>
+    <div class="row">
+      <label for="bonusMaxInput">ボーナス最長時間</label>
+      <input type="number" id="bonusMaxInput" value="55" min="1" max="99999">
+      <span>秒</span>
+    </div>
+    <div class="row">
+      <label for="cycleCountInput">繰り返し回数</label>
+      <input type="number" id="cycleCountInput" value="1" min="1" max="99999">
+      <span>回</span>
     </div>
     <div class="voice-row">
       <label for="voiceToggle">音声</label>
@@ -272,7 +282,8 @@
 
 <script>
   const CIRC = 2 * Math.PI * 90;
-  let running = false, phase = 'idle', elapsed = 0, bonusElapsed = 0, ticker = null;
+  let running = false, phase = 'idle', elapsed = 0, bonusElapsed = 0, bonusDuration = 50;
+  let completedCycles = 0, cycleTarget = 1, ticker = null;
 
   const ring      = document.getElementById('ring');
   const timeDisp  = document.getElementById('timeDisp');
@@ -280,7 +291,9 @@
   const badge     = document.getElementById('badge');
   const mainBtn   = document.getElementById('mainBtn');
   const waitInput = document.getElementById('waitInput');
-  const bonusInput= document.getElementById('bonusInput');
+  const bonusMinInput = document.getElementById('bonusMinInput');
+  const bonusMaxInput = document.getElementById('bonusMaxInput');
+  const cycleCountInput = document.getElementById('cycleCountInput');
   const voiceSel  = document.getElementById('voiceSelect');
   const logInner  = document.getElementById('logInner');
 
@@ -316,6 +329,8 @@
   function toggle() {
     if (!running) {
       running = true; phase = 'waiting'; elapsed = 0; bonusElapsed = 0;
+      completedCycles = 0;
+      cycleTarget = Math.max(1, parseInt(cycleCountInput.value) || 1);
       mainBtn.textContent = '■ 停止';
       mainBtn.classList.add('stop');
       addLog('タイマー開始', 'info');
@@ -327,7 +342,6 @@
 
   function tick() {
     const wait  = Math.max(1, parseInt(waitInput.value)  || 1);
-    const bonus = Math.max(1, parseInt(bonusInput.value) || 1);
 
     if (phase === 'waiting') {
       elapsed++;
@@ -336,21 +350,30 @@
       setBadge('WAITING', false);
       if (elapsed >= wait) {
         phase = 'bonus'; bonusElapsed = 0;
+        const minBonus = Math.max(1, parseInt(bonusMinInput.value) || 1);
+        const maxBonus = Math.max(minBonus, parseInt(bonusMaxInput.value) || minBonus);
+        bonusDuration = Math.floor(Math.random() * (maxBonus - minBonus + 1)) + minBonus;
         setBadge('BONUS START !', true);
-        addLog('ボーナス開始！', 'bonus');
+        addLog(`ボーナス開始！（${bonusDuration}秒）`, 'bonus');
         speak('ボーナス開始');
       }
     } else if (phase === 'bonus') {
       bonusElapsed++;
-      setRing(bonusElapsed / bonus, '#ffb300');
-      setSub(`ボーナス残り ${bonus - bonusElapsed}秒`, 'BONUS');
-      if (bonusElapsed >= bonus) {
-        addLog('ボーナス停止', 'stop');
+      setRing(bonusElapsed / bonusDuration, '#ffb300');
+      setSub(`ボーナス残り ${bonusDuration - bonusElapsed}秒`, 'BONUS');
+      if (bonusElapsed >= bonusDuration) {
+        completedCycles++;
+        addLog(`ボーナス停止（${completedCycles}/${cycleTarget}回）`, 'stop');
         speak('ボーナス停止');
-        phase = 'waiting'; elapsed = 0;
-        setBadge('WAITING', false);
-        setRing(0, '#00e5b0');
-        addLog('待機再開', 'info');
+        if (completedCycles >= cycleTarget) {
+          stop(false);
+          addLog('指定回数終了', 'info');
+        } else {
+          phase = 'waiting'; elapsed = 0;
+          setBadge('WAITING', false);
+          setRing(0, '#00e5b0');
+          addLog('待機再開', 'info');
+        }
       }
     }
   }
@@ -383,7 +406,7 @@
     // 時計表示
     let remain = 0;
     if (phase === 'waiting') remain = Math.max(0, (parseInt(waitInput.value)||1) - elapsed);
-    else if (phase === 'bonus') remain = Math.max(0, (parseInt(bonusInput.value)||1) - bonusElapsed);
+    else if (phase === 'bonus') remain = Math.max(0, bonusDuration - bonusElapsed);
     const mm = String(Math.floor(remain / 60)).padStart(2,'0');
     const ss = String(remain % 60).padStart(2,'0');
     timeDisp.textContent = running ? `${mm}:${ss}` : '00:00';
